@@ -37,19 +37,68 @@ To get started with PP-YOLOE, follow these steps:
 3. Download the pretrained weights and configuration files from the [PaddlePaddle Model Zoo](https://github.com/PaddlePaddle/PaddleDetection).
 
 ### **2. Inference**
-Run inference on an image or video using the provided scripts:
+Run inference on an image, video, or webcam using the provided scripts:
+
 ```bash
-python infer.py --config configs/ppyoloe_crn_l_300e_coco.yml --model_path weights/ppyoloe_crn_l_300e_coco.pdparams --image_path input_image.jpg
+# Run on image
+python inference.py \
+    --source /path/to/image.jpg \
+    --weights /path/to/model.pt \
+    --model-size s \
+    --conf-thres 0.25
+
+# Run on video
+python inference.py \
+    --source /path/to/video.mp4 \
+    --weights /path/to/model.pt
+
+# Run on webcam (use webcam index)
+python inference.py \
+    --source 0 \
+    --weights /path/to/model.pt
+
+# Run on directory of images
+python inference.py \
+    --source /path/to/images/ \
+    --weights /path/to/model.pt \
+    --save-txt
 ```
 
 ### **3. Training**
 To train PP-YOLOE on your custom dataset:
-1. Prepare your dataset in COCO format.
-2. Modify the configuration file (`configs/ppyoloe_crn_l_300e_coco.yml`) to point to your dataset.
-3. Start training:
-   ```bash
-   python tools/train.py -c configs/ppyoloe_crn_l_300e_coco.yml
-   ```
+
+#### COCO Format Dataset:
+```bash
+python train.py \
+    --data-dir /path/to/coco \
+    --train-ann /path/to/annotations/instances_train2017.json \
+    --val-ann /path/to/annotations/instances_val2017.json \
+    --model-size s \
+    --epochs 300 \
+    --batch-size 16 \
+    --img-size 640 \
+    --lr 0.01 \
+    --amp  # Enable mixed precision training
+```
+
+#### YOLO Format Dataset:
+```bash
+python train.py \
+    --data-dir /path/to/custom_data \
+    --model-size s \
+    --num-classes 10 \
+    --epochs 100 \
+    --batch-size 16
+```
+
+#### Training Options:
+- `--model-size`: Model size (s, m, l, x)
+- `--epochs`: Number of training epochs
+- `--batch-size`: Batch size per GPU
+- `--img-size`: Input image size
+- `--lr`: Initial learning rate
+- `--amp`: Enable automatic mixed precision
+- `--resume`: Resume from checkpoint
 
 ---
 
@@ -95,20 +144,63 @@ Check out the object detection results using PP-YOLOE:
 ---
 
 ## **Folder Structure**
-Here’s an overview of the repository structure:
+Here's an overview of the repository structure:
 
 ```
 YOLOE/
-├── configs/                  # Configuration files for training and inference
-│   └── ppyoloe_crn_l_300e_coco.yml
-├── weights/                  # Pretrained model weights
-│   └── ppyoloe_crn_l_300e_coco.pdparams
-├── tools/                    # Training and evaluation scripts
-│   └── train.py
+├── models/                   # Model architecture
+│   ├── __init__.py
+│   ├── backbone.py           # CSPResNet backbone
+│   ├── pan.py                # CustomCSPPAN neck (FPN + PAN)
+│   ├── head.py               # PPYOLOEHead detection head
+│   ├── yoloe.py              # Main YOLOE model
+│   └── iou_loss.py           # IoU loss functions (GIoU, DIoU, CIoU)
+├── assigners/                # Target assignment utilities
+│   ├── __init__.py
+│   ├── atss_assigner.py      # ATSS assigner
+│   ├── bbox_utils.py         # Bounding box utilities
+│   └── utils.py              # Helper functions
 ├── images/                   # Demo images and visualizations
 │   └── yoloe.png
-├── infer.py                  # Inference script
+├── train.py                  # Training script
+├── inference.py              # Inference script (image/video/webcam)
+├── dataset.py                # Dataset classes (COCO, YOLO format)
+├── requirements.txt          # Python dependencies
 └── README.md                 # Project README file
+```
+
+## **Model Sizes**
+
+| Model | Width Mult | Depth Mult | Parameters |
+|-------|------------|------------|------------|
+| YOLOE-S | 0.50 | 0.33 | ~7M |
+| YOLOE-M | 0.75 | 0.67 | ~25M |
+| YOLOE-L | 1.00 | 1.00 | ~50M |
+| YOLOE-X | 1.25 | 1.33 | ~100M |
+
+## **Dataset Formats**
+
+### COCO Format
+Standard COCO JSON annotation format with `images`, `annotations`, and `categories`.
+
+### YOLO Format
+```
+data/
+├── train/
+│   ├── images/
+│   │   ├── img001.jpg
+│   │   └── img002.jpg
+│   └── labels/
+│       ├── img001.txt
+│       └── img002.txt
+└── val/
+    ├── images/
+    └── labels/
+```
+
+Label file format (normalized coordinates):
+```
+class_id x_center y_center width height
 ```
 
 ---

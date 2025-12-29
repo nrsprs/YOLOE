@@ -17,13 +17,14 @@ class ESEAttn(nn.Module):
 
 
 class PPYOLOEHead(nn.Module):
-    def __init__(self, in_channels=None, num_classes=80, ):
+    def __init__(self, in_channels=None, num_classes=80, reg_max=16):
         super(PPYOLOEHead, self).__init__()
         if in_channels is None:
             in_channels = [1024, 512, 256]
         assert len(in_channels) > 0, "len(in_channels) should > 0"
         self.in_channels = in_channels
         self.num_classes = num_classes
+        self.reg_max = reg_max
 
         # stem
         self.stem_cls = nn.ModuleList()
@@ -51,12 +52,12 @@ class PPYOLOEHead(nn.Module):
             avg_feat = F.adaptive_avg_pool2d(feat, (1, 1))
 
             cls_logit = self.pred_cls[i](self.stem_cls[i](feat, avg_feat) + feat)
-            reg_distri = self.pred_reg[i](self.stem_reg[i](feat + avg_feat))
+            reg_distri = self.pred_reg[i](self.stem_reg[i](feat, avg_feat))
 
             cls_score = F.sigmoid(cls_logit)
 
-            cls_score_list.append(cls_score.flatten(2).transpose([0, 2, 1]))
-            reg_distri_list.append(reg_distri.flatten(2).transpose([0, 2, 1]))
+            cls_score_list.append(cls_score.flatten(2).permute(0, 2, 1))
+            reg_distri_list.append(reg_distri.flatten(2).permute(0, 2, 1))
 
         cls_score_list = torch.concat(cls_score_list, dim=1)
         reg_distri_list = torch.concat(reg_distri_list, dim=1)
@@ -72,8 +73,8 @@ class PPYOLOEHead(nn.Module):
             cls_logit = self.pred_cls[i](self.stem_cls[i](feat, avg_feat) +
                                          feat)
             reg_dist = self.pred_reg[i](self.stem_reg[i](feat, avg_feat))
-            reg_dist = reg_dist.reshape([-1, 4, self.reg_max + 1, l]).transpose(
-                [0, 2, 1, 3])
+            reg_dist = reg_dist.reshape([-1, 4, self.reg_max + 1, l]).permute(
+                0, 2, 1, 3)
             reg_dist = self.proj_conv(F.softmax(reg_dist, dim=1))
             # cls and reg
             cls_score = F.sigmoid(cls_logit)

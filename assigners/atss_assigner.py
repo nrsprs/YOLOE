@@ -10,11 +10,11 @@ from .bbox_utils import bbox_center
 from .utils import (check_points_inside_bboxes, compute_max_iou_anchor ,compute_max_iou_gt)
 
 
-class ATSSssigner(nn.Module):
-    def __int__(self , topk = 9 , num_classes = 80 ,
-                force_gt_matching=False,
-                eps=1e-9):
-        super(ATSSssigner, self).__int__()
+class ATSSAssigner(nn.Module):
+    def __init__(self, topk=9, num_classes=80,
+                 force_gt_matching=False,
+                 eps=1e-9):
+        super(ATSSAssigner, self).__init__()
         self.topk = topk
         self.num_classes = num_classes
         self.force_gt_matching = force_gt_matching
@@ -22,7 +22,7 @@ class ATSSssigner(nn.Module):
 
     def _gather_topk_pyramid(self, gt2anchor_distances, num_anchors_list,
                              pad_gt_mask):
-        pad_gt_mask = pad_gt_mask.tile([1 ,1 ,self.topk]).astype(torch.bool)
+        pad_gt_mask = pad_gt_mask.repeat(1, 1, self.topk).to(torch.bool)
         gt2anchor_distances_list = torch.split(gt2anchor_distances , num_anchors_list , dim=-1)
 
         num_anchors_index = np.cumsum(num_anchors_list).tolist()
@@ -39,7 +39,7 @@ class ATSSssigner(nn.Module):
 
             is_in_topk = F.one_hot(topk_idxs , num_anchors).sum(dim=-2)
             is_in_topk = torch.where(is_in_topk > 1 ,torch.zeros_like(is_in_topk), is_in_topk)
-            is_in_topk_list.append(is_in_topk.to(gt2anchor_distances.dtype))
+            is_in_topk_list.append(is_in_topk.to(dtype=gt2anchor_distances.dtype))
         is_in_topk_list = torch.concat(is_in_topk_list, dim=-1)
         topk_idxs_list = torch.concat(topk_idxs_list, dim=-1)
         return is_in_topk_list, topk_idxs_list
@@ -95,6 +95,6 @@ class ATSSssigner(nn.Module):
             return assigned_labels , assigned_bboxes , assigned_scores
 
 
-        ious = iou_
-
-
+        # Compute IoU between anchor boxes and ground truth boxes
+        ious = batch_iou_similarity(gt_bboxes, anchor_bboxes)
+        return ious

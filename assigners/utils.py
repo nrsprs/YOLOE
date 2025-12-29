@@ -24,7 +24,7 @@ def generate_anchors_for_grid_cell(feats,fpn_strides,grid_cell_size=5.0,grid_cel
         anchors.append(anchor.reshape([-1, 4]))
         anchors_points.append(anchor_point.reshape([-1, 2]))
         num_anchors_list.append(len(anchors[-1]))
-        stride_tensor.append(stride_tensor.append(torch.full([num_anchors_list[-1], 1], stride, dtype=feat.dtype)))
+        stride_tensor.append(torch.full([num_anchors_list[-1], 1], stride, dtype=feat.dtype))
 
     anchors = torch.concat(anchors)
     anchors.requires_grad = False
@@ -48,9 +48,9 @@ def compute_max_iou_gt(ious):
     """
 
     num_anchors = ious.shape[-1]
-    max_iou_index = ious.argmax(axis = -1)
-    is_max_index = F.one_hot(max_iou_index , num_anchors)
-    return is_max_index.astype(ious.dtype)
+    max_iou_index = ious.argmax(dim=-1)
+    is_max_index = F.one_hot(max_iou_index, num_anchors)
+    return is_max_index.to(dtype=ious.dtype)
 
 
 
@@ -63,9 +63,9 @@ def compute_max_iou_anchor(ious):
         is_max_iou (Tensor, float32): shape[B, n, L], value=1. means selected
     """
     num_max_boxes = ious.shape[-2]
-    max_iou_index = ious.argmax(axis=-2)
-    is_max_iou = F.one_hot(max_iou_index, num_max_boxes).transpose([0, 2, 1])
-    return is_max_iou.astype(ious.dtype)
+    max_iou_index = ious.argmax(dim=-2)
+    is_max_iou = F.one_hot(max_iou_index, num_max_boxes).permute(0, 2, 1)
+    return is_max_iou.to(dtype=ious.dtype)
 
 
 def check_points_inside_bboxes(points,
@@ -82,17 +82,17 @@ def check_points_inside_bboxes(points,
         is_in_bboxes (Tensor, float32): shape[B, n, L], value=1. means selected
     """
 
-    points = points.unsqueeze([0,1])
-    x,y = points.chunk(2,axis = -1)
+    points = points.unsqueeze(0).unsqueeze(1)
+    x, y = points.chunk(2, dim=-1)
 
-    xmin , ymin , xmax, ymax = bboxes.unsqueeze(2).chunk(4,axis=-1)
+    xmin, ymin, xmax, ymax = bboxes.unsqueeze(2).chunk(4, dim=-1)
     l = x - xmin
     t = y - ymin
     r = xmax - x
     b = ymax - y
 
-    delta_ltrb = torch.concat([l,t,r,b],dim=-1)
-    is_in_bboxes = (delta_ltrb.min(dim=-1) > eps )
+    delta_ltrb = torch.concat([l, t, r, b], dim=-1)
+    is_in_bboxes = (delta_ltrb.min(dim=-1).values > eps)
 
     if center_radius_tensor is not None:
         # check whether `points` is in `center_radius`
@@ -104,11 +104,11 @@ def check_points_inside_bboxes(points,
         r = (cx + center_radius_tensor) - x
         b = (cy + center_radius_tensor) - y
         delta_ltrb_c = torch.concat([l, t, r, b], dim=-1)
-        is_in_center = (delta_ltrb_c.min(dim=-1) > eps)
+        is_in_center = (delta_ltrb_c.min(dim=-1).values > eps)
         return (torch.logical_and(is_in_bboxes, is_in_center),
                 torch.logical_or(is_in_bboxes, is_in_center))
 
-    return is_in_bboxes.astype(bboxes.dtype)
+    return is_in_bboxes.to(dtype=bboxes.dtype)
 
 
 def gather_topk_anchors(metrics, topk, largest=True, topk_mask=None, eps=1e-9):
@@ -132,8 +132,8 @@ def gather_topk_anchors(metrics, topk, largest=True, topk_mask=None, eps=1e-9):
         topk_mask = (topk_metrics.max(dim=-1, keepdim=True) > eps).tile([1, 1, topk])
     topk_idxs = torch.where(topk_mask, topk_idxs, torch.zeros_like(topk_idxs))
     is_in_topk = F.one_hot(topk_idxs, num_anchors).sum(dim=-2)
-    is_in_topk = torch.where(is_in_topk > 1,torch.zeros_like(is_in_topk), is_in_topk)
-    return is_in_topk.astype(metrics.dtype)
+    is_in_topk = torch.where(is_in_topk > 1, torch.zeros_like(is_in_topk), is_in_topk)
+    return is_in_topk.to(dtype=metrics.dtype)
 
 
 
@@ -155,7 +155,7 @@ def pad_gt(gt_labels, gt_bboxes, gt_scores=None):
     if isinstance(gt_labels, torch.Tensor) and isinstance(gt_bboxes,
                                                            torch.Tensor):
         assert gt_labels.ndim == gt_bboxes.ndim and gt_bboxes.ndim == 3
-        pad_gt_mask = (gt_bboxes.sum(dim=-1, keepdim=True) > 0).astype(gt_bboxes.dtype)
+        pad_gt_mask = (gt_bboxes.sum(dim=-1, keepdim=True) > 0).to(dtype=gt_bboxes.dtype)
         if gt_scores is None:
             gt_scores = pad_gt_mask.clone()
         assert gt_labels.ndim == gt_scores.ndim

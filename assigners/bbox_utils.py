@@ -234,7 +234,7 @@ def xywh2xyxy(box):
 
 def make_grid(h, w, dtype):
     yv, xv = torch.meshgrid([torch.arange(h), torch.arange(w)])
-    return torch.stack((xv, yv), 2).cast(dtype=dtype)
+    return torch.stack((xv, yv), 2).to(dtype=dtype)
 
 
 def decode_yolo(box, anchor, downsample_ratio):
@@ -256,7 +256,7 @@ def decode_yolo(box, anchor, downsample_ratio):
     y1 = (y + grid[:, :, :, :, 1:2]) / grid_h
 
     anchor = torch.tensor(anchor)
-    anchor = torch.cast(anchor, x.dtype)
+    anchor = anchor.to(dtype=x.dtype)
     anchor = anchor.reshape((1, na, 1, 1, 2))
     w1 = torch.exp(w) * anchor[:, :, :, :, 0:1] / (downsample_ratio * grid_w)
     h1 = torch.exp(h) * anchor[:, :, :, :, 1:2] / (downsample_ratio * grid_h)
@@ -339,7 +339,7 @@ def bbox_iou(box1, box2, giou=False, diou=False, ciou=False, eps=1e-9):
                 delta = torch.atan(w1 / h1) - torch.atan(w2 / h2)
                 v = (4 / math.pi ** 2) * torch.pow(delta, 2)
                 alpha = v / (1 + eps - iou + v)
-                alpha.stop_gradient = True
+                alpha = alpha.detach()
                 return iou - (rho2 / c2 + v * alpha)
     else:
         return iou
@@ -601,7 +601,7 @@ def rbox2poly(rrects):
     to
     poly:[x0,y0,x1,y1,x2,y2,x3,y3]
     """
-    N = torch.shape(rrects)[0]
+    N = rrects.shape[0]
 
     x_ctr = rrects[:, 0]
     y_ctr = rrects[:, 1]
@@ -614,19 +614,19 @@ def rbox2poly(rrects):
     normal_rects = torch.stack(
         [tl_x, br_x, br_x, tl_x, tl_y, tl_y, br_y, br_y], dim=0)
     normal_rects = torch.reshape(normal_rects, [2, 4, N])
-    normal_rects = torch.transpose(normal_rects, [2, 0, 1])
+    normal_rects = normal_rects.permute(2, 0, 1)
 
     sin, cos = torch.sin(angle), torch.cos(angle)
     # M.shape=[N,2,2]
     M = torch.stack([cos, -sin, sin, cos], dim=0)
     M = torch.reshape(M, [2, 2, N])
-    M = torch.transpose(M, [2, 0, 1])
+    M = M.permute(2, 0, 1)
 
     # polys:[N,8]
     polys = torch.matmul(M, normal_rects)
-    polys = torch.transpose(polys, [2, 1, 0])
+    polys = polys.permute(2, 1, 0)
     polys = torch.reshape(polys, [-1, N])
-    polys = torch.transpose(polys, [1, 0])
+    polys = polys.permute(1, 0)
 
     tmp = torch.stack(
         [x_ctr, y_ctr, x_ctr, y_ctr, x_ctr, y_ctr, x_ctr, y_ctr], dim=1)

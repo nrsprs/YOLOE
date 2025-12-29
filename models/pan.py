@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from  backbone import ConvBNLayer, BasicBlock
+from .backbone import ConvBNLayer, BasicBlock
 import torch.nn.functional as F
 
 __all__ = ['CustomCSPPAN']

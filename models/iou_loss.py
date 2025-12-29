@@ -74,7 +74,7 @@ def bbox_iou(box1, box2, giou=False, diou=False, ciou=False, eps=1e-9):
                 delta = torch.atan(w1 / h1) - torch.atan(w2 / h2)
                 v = (4 / math.pi ** 2) * torch.pow(delta, 2)
                 alpha = v / (1 + eps - iou + v)
-                alpha.stop_gradient = True
+                alpha = alpha.detach()
                 return iou - (rho2 / c2 + v * alpha)
     else:
         return iou
@@ -238,7 +238,7 @@ class DIouLoss(GIoULoss):
             arctan = torch.atan(ar_gt) - torch.atan(ar_pred)
             ar_loss = 4. / np.pi / np.pi * arctan * arctan
             alpha = ar_loss / (1 - iouk + ar_loss + self.eps)
-            alpha.stop_gradient = True
+            alpha = alpha.detach()
             ciou_term = alpha * ar_loss
 
         diou = torch.mean((1 - iouk + ciou_term + diou_term) * iou_weight)
