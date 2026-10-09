@@ -28,10 +28,12 @@ class YOLOE(nn.Module):
         self.num_classes = num_classes
         self.reg_max = reg_max
         
-        # Backbone: CSPResNet
+        # Backbone: CSPResNet (PP-YOLOE CRN uses a 3-conv large stem and swish activations)
         self.backbone = CSPResNet(
             width_mult=width_mult,
             depth_mult=depth_mult,
+            act='swish',
+            use_large_stem=True,
             return_idx=[1, 2, 3]  # Return features from stages 1, 2, 3
         )
         
@@ -39,16 +41,18 @@ class YOLOE(nn.Module):
         backbone_out_channels = [256, 512, 1024]
         backbone_out_channels = [max(round(c * width_mult), 1) for c in backbone_out_channels]
         
-        # Neck: CustomCSPPAN
+        # Neck: CustomCSPPAN (official PP-YOLOE neck width is [768, 384, 192], SPP on the top stage)
         self.neck = CustomCSPPAN(
             in_channels=backbone_out_channels,
-            out_channels=[1024, 512, 256],
+            out_channels=[768, 384, 192],
+            act='swish',
+            spp=True,
             width_mult=width_mult,
             depth_mult=depth_mult
         )
         
         # Head: PPYOLOEHead
-        head_in_channels = [1024, 512, 256]
+        head_in_channels = [768, 384, 192]
         head_in_channels = [max(round(c * width_mult), 1) for c in head_in_channels]
         self.head = PPYOLOEHead(
             in_channels=head_in_channels,

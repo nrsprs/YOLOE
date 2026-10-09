@@ -2,14 +2,33 @@ import torch
 import torch.nn as nn
 
 
+def get_act_fn(act):
+    """Activation factory matching PaddleDetection's get_act_fn naming."""
+    if act is None:
+        return nn.Identity()
+    if isinstance(act, nn.Module):
+        return act
+    acts = {
+        'relu': lambda: nn.ReLU(inplace=True),
+        'leaky': lambda: nn.LeakyReLU(negative_slope=0.1, inplace=True),
+        'relu6': lambda: nn.ReLU6(inplace=True),
+        'sigmoid': lambda: nn.Sigmoid(),
+        'hardsigmoid': lambda: nn.Hardsigmoid(),
+        'hardswish': lambda: nn.Hardswish(inplace=True),
+        'swish': lambda: nn.SiLU(inplace=True),
+        'silu': lambda: nn.SiLU(inplace=True),
+    }
+    return acts[act]()
+
+
 class ConvBNLayer(nn.Module):
-    def __init__(self, in_channels, out_channels, filter_size=3, stride=1, groups=1, padding=0):
+    def __init__(self, in_channels, out_channels, filter_size=3, stride=1, groups=1, padding=0, act='hardswish'):
         super(ConvBNLayer, self).__init__()
         self.conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels,
                               kernel_size=(filter_size, filter_size), stride=(stride, stride), padding=padding,
                               groups=groups, bias=False)
         self.bn = nn.BatchNorm2d(out_channels)
-        self.act = nn.Hardswish(inplace=True)
+        self.act = get_act_fn(act)
 
     def forward(self, x):
         x = self.conv(x)
@@ -23,9 +42,10 @@ class RepVggBlock(nn.Module):
         super(RepVggBlock, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.conv1 = ConvBNLayer(in_channels, out_channels, 3, stride=1, padding=1)
-        self.conv2 = ConvBNLayer(in_channels, out_channels, 1, stride=1, padding=0)
-        self.act = nn.ReLU(inplace=True)
+        # Branches stay linear; activation applies to the summed output
+        self.conv1 = ConvBNLayer(in_channels, out_channels, 3, stride=1, padding=1, act=None)
+        self.conv2 = ConvBNLayer(in_channels, out_channels, 1, stride=1, padding=0, act=None)
+        self.act = get_act_fn(act)
 
     def forward(self, x):
         if hasattr(self, 'conv'):
@@ -111,19 +131,18 @@ class CSPResNet(nn.Module):
             layers = [3, 6, 6, 3]
         channels = [max(round(c * width_mult), 1) for c in channels]
         layers = [max(round(l * depth_mult), 1) for l in layers]
-        act = nn.ReLU(inplace=True)
 
         if use_large_stem:
             self.stem = nn.Sequential(
-                *[ConvBNLayer(3, channels[0] // 2, 3, stride=2, padding=1),
-                  ConvBNLayer(channels[0] // 2, channels[0] // 2, 3, stride=1, padding=1),
-                  ConvBNLayer(channels[0] // 2, channels[0], 3, stride=1, padding=1)])
+                *[ConvBNLayer(3, channels[0] // 2, 3, stride=2, padding=1, act=act),
+                  ConvBNLayer(channels[0] // 2, channels[0] // 2, 3, stride=1, padding=1, act=act),
+                  ConvBNLayer(channels[0] // 2, channels[0], 3, stride=1, padding=1, act=act)])
         else:
-            self.stem = nn.Sequential(*[ConvBNLayer(3, channels[0] // 2, 3, stride=2, padding=1),
-                                        ConvBNLayer(channels[0] // 2, channels[0], 3, stride=1, padding=1)])
+            self.stem = nn.Sequential(*[ConvBNLayer(3, channels[0] // 2, 3, stride=2, padding=1, act=act),
+                                        ConvBNLayer(channels[0] // 2, channels[0], 3, stride=1, padding=1, act=act)])
 
         n = len(channels) - 1
-        self.stages = nn.Sequential(*[CSPResStage(BasicBlock, channels[i], channels[i + 1], layers[i], 2) for i in range(n)])
+        self.stages = nn.Sequential(*[CSPResStage(BasicBlock, channels[i], channels[i + 1], layers[i], 2, act=act) for i in range(n)])
         self._out_channels = channels[1:]
         self._out_strides = [4, 8, 16, 32]
         self.return_idx = return_idx

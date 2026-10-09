@@ -8,7 +8,7 @@ class ESEAttn(nn.Module):
     def __init__(self, feat_channels, act='swish'):
         super(ESEAttn, self).__init__()
         self.fc = nn.Conv2d(feat_channels, feat_channels, kernel_size=(1, 1))
-        self.conv = ConvBNLayer(feat_channels, feat_channels, filter_size=1, )
+        self.conv = ConvBNLayer(feat_channels, feat_channels, filter_size=1, act=act)
 
     def forward(self, feat, avg_feat):
         fc = self.fc(avg_feat)

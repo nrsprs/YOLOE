@@ -14,7 +14,7 @@ class SPP(nn.Module):
         for i, size in enumerate(pool_size):
             pool = nn.MaxPool2d(kernel_size=size, stride=1, padding=size // 2)
             self.pool.append(pool)
-        self.conv = ConvBNLayer(in_channels, out_channels, k, padding=k // 2)
+        self.conv = ConvBNLayer(in_channels, out_channels, k, padding=k // 2, act=act)
 
     def forward(self, x):
         outs = [x]
@@ -32,8 +32,8 @@ class CSPStage(nn.Module):
     def __init__(self, ch_in, ch_out, n, act='swish', spp=False):
         super(CSPStage, self).__init__()
         ch_mid = int(ch_out // 2)
-        self.conv1 = ConvBNLayer(ch_in, ch_mid, 1)
-        self.conv2 = ConvBNLayer(ch_in, ch_mid, 1)
+        self.conv1 = ConvBNLayer(ch_in, ch_mid, 1, act=act)
+        self.conv2 = ConvBNLayer(ch_in, ch_mid, 1, act=act)
         self.convs = nn.Sequential()
         next_ch_in = ch_mid
         for i in range(n):
@@ -41,7 +41,7 @@ class CSPStage(nn.Module):
             if i == (n - 1) // 2 and spp:
                 self.convs.add_module('SPP_'+ str(i) ,SPP(ch_mid * 4, ch_mid, 1, [5, 9, 13], act=act))
             next_ch_in = ch_mid
-        self.conv3 = ConvBNLayer(ch_mid * 2, ch_out, 1)
+        self.conv3 = ConvBNLayer(ch_mid * 2, ch_out, 1, act=act)
 
     def forward(self, x):
         y1 = self.conv1(x)
@@ -85,7 +85,7 @@ class CustomCSPPAN(nn.Module):
                     stage.add_module("CSPStage_"+str(j) ,CSPStage(ch_out, ch_out, block_num, act=act, spp=(spp and i == 0)))
             fpn_stages.append(stage)
             if i < self.num_blocks - 1:
-                fpn_routes.append(ConvBNLayer(in_channels=ch_out, out_channels=ch_out // 2, filter_size=1, stride=1, padding=0, ))
+                fpn_routes.append(ConvBNLayer(in_channels=ch_out, out_channels=ch_out // 2, filter_size=1, stride=1, padding=0, act=act))
             ch_pre = ch_out
 
         self.fpn_stages = nn.ModuleList(fpn_stages)
@@ -93,7 +93,7 @@ class CustomCSPPAN(nn.Module):
         pan_stages = []
         pan_routes = []
         for i in reversed(range(self.num_blocks - 1)):
-            pan_routes.append(ConvBNLayer(in_channels=out_channels[i + 1], out_channels=out_channels[i + 1], filter_size=3, stride=2,padding=1, ))
+            pan_routes.append(ConvBNLayer(in_channels=out_channels[i + 1], out_channels=out_channels[i + 1], filter_size=3, stride=2, padding=1, act=act))
             ch_in = out_channels[i] + out_channels[i + 1]
             ch_out = out_channels[i]
             stage = nn.Sequential()

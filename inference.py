@@ -129,22 +129,14 @@ class YOLOEPredictor:
         
         orig_w, orig_h = image.size
         
-        # Resize with aspect ratio preserved
-        scale = min(self.img_size / orig_h, self.img_size / orig_w)
-        new_h = int(orig_h * scale)
-        new_w = int(orig_w * scale)
+        # PP-YOLOE eval resizes to the input size directly (no letterbox)
+        image = image.resize((self.img_size, self.img_size), Image.BILINEAR)
         
-        image = image.resize((new_w, new_h), Image.BILINEAR)
-        
-        # Pad to target size
-        padded = Image.new('RGB', (self.img_size, self.img_size), (114, 114, 114))
-        padded.paste(image, (0, 0))
-        
-        # To tensor and normalize
-        tensor = TF.to_tensor(padded)
-        tensor = TF.normalize(tensor, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        # To tensor (to_tensor already scales pixels to [0, 1], PP-YOLOE uses no mean/std)
+        tensor = TF.to_tensor(image)
         tensor = tensor.unsqueeze(0)
         
+        scale = (self.img_size / orig_w, self.img_size / orig_h)
         return tensor.to(self.device), (orig_h, orig_w), scale
     
     def postprocess(self, predictions, orig_size, scale, filter_classes=None):
@@ -231,8 +223,10 @@ class YOLOEPredictor:
         scores = scores[keep_indices]
         class_ids = class_ids[keep_indices]
         
-        # Scale boxes back to original image size
-        boxes = boxes / scale
+        # Scale boxes back to original image size (per-axis, input is not letterboxed)
+        scale_x, scale_y = scale
+        boxes[:, [0, 2]] = boxes[:, [0, 2]] / scale_x
+        boxes[:, [1, 3]] = boxes[:, [1, 3]] / scale_y
         
         # Clip to image boundaries
         orig_h, orig_w = orig_size
